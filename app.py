@@ -3,9 +3,9 @@ import pandas as pd
 from datetime import datetime, date
 from supabase import create_client
 
-# ===== CONFIG =====
-SUPABASE_URL = "https://uwzbdixrynlpqogohokp.supabase.co"
-SUPABASE_KEY = "sb_publishable_pS1f-faF8q2wrrkkAi6VyA_fv4mmWS7"
+# ===== CONFIG SUPABASE =====
+SUPABASE_URL = st.secrets["SUPABASE_URL"]
+SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
 
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
@@ -35,7 +35,6 @@ if "user" not in st.session_state:
                 "email": email,
                 "password": senha
             })
-
             if res.user:
                 st.session_state["user"] = res.user
                 st.rerun()
@@ -48,7 +47,7 @@ if "user" not in st.session_state:
                 "email": email,
                 "password": senha
             })
-            st.success("Conta criada!")
+            st.success("Conta criada! Faça login.")
 
     st.stop()
 
@@ -61,7 +60,7 @@ res = supabase.table("movimentacoes") \
 df = pd.DataFrame(res.data)
 
 if df.empty:
-    df = pd.DataFrame(columns=["data","tipo","categoria","descricao","valor","mes","ano"])
+    df = pd.DataFrame(columns=["id","data","tipo","categoria","descricao","valor","mes","ano"])
 
 df["data"] = pd.to_datetime(df["data"], errors="coerce")
 
@@ -98,12 +97,13 @@ padding:20px;border-radius:15px;color:white;text-align:center;margin-bottom:15px
 </div>
 """, unsafe_allow_html=True)
 
-# ===== BOTÕES =====
+# ===== CONTROLE ESTADO =====
 if "show_ganho" not in st.session_state:
     st.session_state.show_ganho = False
 if "show_gasto" not in st.session_state:
     st.session_state.show_gasto = False
 
+# ===== BOTÕES =====
 col1, col2 = st.columns(2)
 
 with col1:
@@ -124,7 +124,11 @@ if st.session_state.show_ganho:
         descricao = st.text_input("Descrição")
         valor = st.number_input("Valor", min_value=0.0)
 
-        if st.form_submit_button("Salvar"):
+        col1, col2 = st.columns(2)
+        salvar = col1.form_submit_button("Salvar")
+        cancelar = col2.form_submit_button("❌ Cancelar")
+
+        if salvar:
             supabase.table("movimentacoes").insert({
                 "user_id": st.session_state["user"].id,
                 "data": str(data),
@@ -139,6 +143,10 @@ if st.session_state.show_ganho:
             st.session_state.show_ganho = False
             st.rerun()
 
+        if cancelar:
+            st.session_state.show_ganho = False
+            st.rerun()
+
 # ===== FORM GASTO =====
 if st.session_state.show_gasto:
     with st.form("form_gasto", clear_on_submit=True):
@@ -149,7 +157,11 @@ if st.session_state.show_gasto:
         descricao = st.text_input("Descrição")
         valor = st.number_input("Valor", min_value=0.0)
 
-        if st.form_submit_button("Salvar"):
+        col1, col2 = st.columns(2)
+        salvar = col1.form_submit_button("Salvar")
+        cancelar = col2.form_submit_button("❌ Cancelar")
+
+        if salvar:
             supabase.table("movimentacoes").insert({
                 "user_id": st.session_state["user"].id,
                 "data": str(data),
@@ -161,6 +173,10 @@ if st.session_state.show_gasto:
                 "ano": data.year
             }).execute()
 
+            st.session_state.show_gasto = False
+            st.rerun()
+
+        if cancelar:
             st.session_state.show_gasto = False
             st.rerun()
 
@@ -184,3 +200,51 @@ with st.expander("📊 Histórico"):
             <small>{data_formatada}</small>
         </div>
         """, unsafe_allow_html=True)
+
+        col1, col2 = st.columns(2)
+
+        # EDITAR
+        with col1:
+            if st.button("✏️", key=f"edit_{row['id']}"):
+                st.session_state["edit_id"] = row["id"]
+
+        # EXCLUIR
+        with col2:
+            if st.button("🗑️", key=f"del_{row['id']}"):
+                supabase.table("movimentacoes") \
+                    .delete() \
+                    .eq("id", row["id"]) \
+                    .execute()
+
+                st.rerun()
+
+# ===== EDITAR =====
+if "edit_id" in st.session_state:
+    linha = df[df["id"] == st.session_state["edit_id"]].iloc[0]
+
+    st.divider()
+    st.subheader("✏️ Editar lançamento")
+
+    with st.form("edit_form"):
+        data = st.date_input("Data", linha["data"].date())
+        tipo = st.selectbox("Tipo", ["Ganho","Gasto"], index=0 if linha["tipo"]=="Ganho" else 1)
+        categoria = st.text_input("Categoria", linha["categoria"])
+        descricao = st.text_input("Descrição", linha["descricao"])
+        valor = st.number_input("Valor", value=float(linha["valor"]))
+
+        if st.form_submit_button("Atualizar"):
+            supabase.table("movimentacoes") \
+                .update({
+                    "data": str(data),
+                    "tipo": tipo,
+                    "categoria": categoria,
+                    "descricao": descricao,
+                    "valor": valor,
+                    "mes": MESES_PT[data.month],
+                    "ano": data.year
+                }) \
+                .eq("id", linha["id"]) \
+                .execute()
+
+            del st.session_state["edit_id"]
+            st.rerun()

@@ -2,6 +2,9 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime, date
 from supabase import create_client
+st.markdown("""
+<link rel="manifest" href="/static/manifest.json">
+""", unsafe_allow_html=True)
 
 # ===== CONFIG SUPABASE =====
 SUPABASE_URL = st.secrets["SUPABASE_URL"]

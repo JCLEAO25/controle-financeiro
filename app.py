@@ -106,7 +106,7 @@ if "user" not in st.session_state:
                         "password": senha
                     })
                     if res.user:
-                        st.session_state["user"] = res.user
+                        st.session_state["user"] = {"id": res.user.id}
                         cookies["user_id"] = res.user.id
                         cookies.save()
                         st.rerun()

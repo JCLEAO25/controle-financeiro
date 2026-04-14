@@ -88,7 +88,7 @@ def gerar_pdf_estilizado(df, mes, ano, ganhos, gastos, saldo):
 # ===== LOGIN PERSISTENTE =====
 if "user" not in st.session_state:
 
-    if cookies.get("user_id"):
+    iif cookies.get("user_id") and not st.session_state.get("logout"):
         st.session_state["user"] = {"id": cookies.get("user_id")}
     else:
         st.title("🔐 Login")
@@ -125,11 +125,20 @@ if "user" not in st.session_state:
 
 # ===== LOGOUT =====
 if st.button("🚪 Sair"):
+
+    # marca logout
+    st.session_state["logout"] = True
+
+    # remove cookie
     if "user_id" in cookies:
         del cookies["user_id"]
+
     cookies.save()
-    st.session_state.clear()
-    st.success("Logout realizado")
+
+    # remove user
+    if "user" in st.session_state:
+        del st.session_state["user"]
+
     st.rerun()
 
 # ===== DADOS =====

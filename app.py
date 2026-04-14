@@ -77,36 +77,49 @@ def gerar_pdf_estilizado(df, mes, ano, ganhos, gastos, saldo):
     buffer.seek(0)
     return buffer
 
-# ===== LOGIN =====
+# ===== AUTO LOGIN =====
 if "user" not in st.session_state:
-    st.title("🔐 Login")
 
-    email = st.text_input("Email")
-    senha = st.text_input("Senha", type="password")
+    session = supabase.auth.get_session()
 
-    col1, col2 = st.columns(2)
+    if session and session.user:
+        st.session_state["user"] = session.user
+    else:
+        st.title("🔐 Login")
 
-    with col1:
-        if st.button("Entrar"):
-            res = supabase.auth.sign_in_with_password({
-                "email": email,
-                "password": senha
-            })
-            if res.user:
-                st.session_state["user"] = res.user
-                st.rerun()
-            else:
-                st.error("Erro no login")
+        email = st.text_input("Email")
+        senha = st.text_input("Senha", type="password")
 
-    with col2:
-        if st.button("Criar conta"):
-            supabase.auth.sign_up({
-                "email": email,
-                "password": senha
-            })
-            st.success("Conta criada! Faça login.")
+        col1, col2 = st.columns(2)
 
-    st.stop()
+        with col1:
+            if st.button("Entrar"):
+                if email and senha:
+                    res = supabase.auth.sign_in_with_password(
+                        email=email,
+                        password=senha
+                    )
+                    if res.user:
+                        st.session_state["user"] = res.user
+                        st.rerun()
+                    else:
+                        st.error("Erro no login")
+
+        with col2:
+            if st.button("Criar conta"):
+                supabase.auth.sign_up(
+                    email=email,
+                    password=senha
+                )
+                st.success("Conta criada!")
+
+        st.stop()
+
+# ===== LOGOUT =====
+if st.button("🚪 Sair"):
+    supabase.auth.sign_out()
+    st.session_state.clear()
+    st.rerun()
 
 # ===== CARREGAR DADOS =====
 res = supabase.table("movimentacoes") \

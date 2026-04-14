@@ -3,23 +3,28 @@ import pandas as pd
 from datetime import datetime, date
 from supabase import create_client
 
+# ===== PDF =====
+import io
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.lib import colors
+from reportlab.lib.styles import getSampleStyleSheet
+
 st.set_page_config(page_title="Controle Financeiro", layout="centered")
 
-# 👇 AQUI
+# ===== ICONES / PWA =====
 st.markdown("""
 <link rel="manifest" href="/static/manifest.json">
 <link rel="apple-touch-icon" href="https://raw.githubusercontent.com/JCLEAO25/controle-financeiro/main/static/icon-512.png">
 <link rel="icon" type="image/png" href="https://raw.githubusercontent.com/JCLEAO25/controle-financeiro/main/static/icon-192.png">
 """, unsafe_allow_html=True)
 
-# ===== CONFIG SUPABASE =====
+# ===== SUPABASE =====
 SUPABASE_URL = st.secrets["SUPABASE_URL"]
 SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
 
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-st.set_page_config(page_title="Controle Financeiro", layout="centered")
-
+# ===== MESES =====
 MESES_PT = {
     1: "JAN", 2: "FEV", 3: "MAR", 4: "ABR",
     5: "MAI", 6: "JUN", 7: "JUL", 8: "AGO",
@@ -28,6 +33,49 @@ MESES_PT = {
 
 def formatar_moeda(valor):
     return f"R$ {valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+# ===== PDF PREMIUM =====
+def gerar_pdf_estilizado(df, mes, ano, ganhos, gastos, saldo):
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer)
+
+    styles = getSampleStyleSheet()
+    elementos = []
+
+    elementos.append(Paragraph("<b>💰 Controle Financeiro</b>", styles['Title']))
+    elementos.append(Spacer(1, 10))
+    elementos.append(Paragraph(f"<b>Mês:</b> {mes}/{ano}", styles['Normal']))
+    elementos.append(Spacer(1, 10))
+
+    elementos.append(Paragraph(f"<b>Entrada:</b> R$ {ganhos:,.2f}", styles['Normal']))
+    elementos.append(Paragraph(f"<b>Gastos:</b> R$ {gastos:,.2f}", styles['Normal']))
+    elementos.append(Paragraph(f"<b>Saldo:</b> R$ {saldo:,.2f}", styles['Normal']))
+    elementos.append(Spacer(1, 15))
+
+    dados = [["Data", "Tipo", "Categoria", "Descrição", "Valor"]]
+
+    for _, row in df.iterrows():
+        dados.append([
+            row["data"].strftime("%d/%m/%Y") if pd.notnull(row["data"]) else "",
+            row["tipo"],
+            row["categoria"],
+            row["descricao"],
+            f"R$ {row['valor']:,.2f}"
+        ])
+
+    tabela = Table(dados)
+    tabela.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#3a3a5f")),
+        ('TEXTCOLOR',(0,0),(-1,0),colors.white),
+        ('GRID', (0,0), (-1,-1), 0.5, colors.grey),
+        ('BACKGROUND', (0,1), (-1,-1), colors.whitesmoke),
+    ]))
+
+    elementos.append(tabela)
+
+    doc.build(elementos)
+    buffer.seek(0)
+    return buffer
 
 # ===== LOGIN =====
 if "user" not in st.session_state:
@@ -105,6 +153,16 @@ padding:20px;border-radius:15px;color:white;text-align:center;margin-bottom:15px
 <p>Entrada: {formatar_moeda(ganhos)}<br>Gastos: {formatar_moeda(gastos)}</p>
 </div>
 """, unsafe_allow_html=True)
+
+# ===== EXPORT PDF =====
+pdf_file = gerar_pdf_estilizado(df_mes, mes, ano, ganhos, gastos, saldo)
+
+st.download_button(
+    label="📄 Exportar PDF Premium",
+    data=pdf_file,
+    file_name=f"resumo_{mes}_{ano}.pdf",
+    mime="application/pdf"
+)
 
 # ===== CONTROLE ESTADO =====
 if "show_ganho" not in st.session_state:
@@ -212,19 +270,13 @@ with st.expander("📊 Histórico"):
 
         col1, col2 = st.columns(2)
 
-        # EDITAR
         with col1:
             if st.button("✏️", key=f"edit_{row['id']}"):
                 st.session_state["edit_id"] = row["id"]
 
-        # EXCLUIR
         with col2:
             if st.button("🗑️", key=f"del_{row['id']}"):
-                supabase.table("movimentacoes") \
-                    .delete() \
-                    .eq("id", row["id"]) \
-                    .execute()
-
+                supabase.table("movimentacoes").delete().eq("id", row["id"]).execute()
                 st.rerun()
 
 # ===== EDITAR =====
@@ -242,18 +294,15 @@ if "edit_id" in st.session_state:
         valor = st.number_input("Valor", value=float(linha["valor"]))
 
         if st.form_submit_button("Atualizar"):
-            supabase.table("movimentacoes") \
-                .update({
-                    "data": str(data),
-                    "tipo": tipo,
-                    "categoria": categoria,
-                    "descricao": descricao,
-                    "valor": valor,
-                    "mes": MESES_PT[data.month],
-                    "ano": data.year
-                }) \
-                .eq("id", linha["id"]) \
-                .execute()
+            supabase.table("movimentacoes").update({
+                "data": str(data),
+                "tipo": tipo,
+                "categoria": categoria,
+                "descricao": descricao,
+                "valor": valor,
+                "mes": MESES_PT[data.month],
+                "ano": data.year
+            }).eq("id", linha["id"]).execute()
 
             del st.session_state["edit_id"]
             st.rerun()

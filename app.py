@@ -8,8 +8,8 @@ st.set_page_config(page_title="Controle Financeiro", layout="centered")
 # 👇 AQUI
 st.markdown("""
 <link rel="manifest" href="/static/manifest.json">
-<link rel="apple-touch-icon" href="/static/icon-512.png">
-<link rel="icon" type="image/png" href="/static/icon-192.png">
+<link rel="apple-touch-icon" href="https://raw.githubusercontent.com/JCLEAO25/controle-financeiro/main/static/icon-512.png">
+<link rel="icon" type="image/png" href="https://raw.githubusercontent.com/JCLEAO25/controle-financeiro/main/static/icon-192.png">
 """, unsafe_allow_html=True)
 
 # ===== CONFIG SUPABASE =====

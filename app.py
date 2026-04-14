@@ -95,10 +95,10 @@ if "user" not in st.session_state:
         with col1:
             if st.button("Entrar"):
                 if email and senha:
-                    res = supabase.auth.sign_in_with_password(
-                        email=email,
-                        password=senha
-                    )
+                    res = supabase.auth.sign_in_with_password({
+                        "email": email,
+                        "password": senha
+                    })
                     if res.user:
                         st.session_state["user"] = res.user
                         st.rerun()
@@ -107,10 +107,10 @@ if "user" not in st.session_state:
 
         with col2:
             if st.button("Criar conta"):
-                supabase.auth.sign_up(
-                    email=email,
-                    password=senha
-                )
+                supabase.auth.sign_up({
+                    "email": email,
+                    "password": senha
+                })
                 st.success("Conta criada!")
 
         st.stop()

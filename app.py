@@ -25,7 +25,7 @@ SUPABASE_URL = st.secrets["SUPABASE_URL"]
 SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# ===== COOKIE INIT =====
+# ===== COOKIE =====
 cookies = EncryptedCookieManager(
     prefix="finance_app",
     password="finance_app_2026_secure"
@@ -85,7 +85,7 @@ def gerar_pdf_estilizado(df, mes, ano, ganhos, gastos, saldo):
     buffer.seek(0)
     return buffer
 
-# ===== LOGIN PERSISTENTE =====
+# ===== LOGIN =====
 if "user" not in st.session_state:
 
     if cookies.get("user_id") and not st.session_state.get("logout"):
@@ -109,6 +109,7 @@ if "user" not in st.session_state:
                         st.session_state["user"] = {"id": res.user.id}
                         cookies["user_id"] = res.user.id
                         cookies.save()
+                        st.session_state["logout"] = False
                         st.rerun()
                     else:
                         st.error("Erro no login")
@@ -125,17 +126,13 @@ if "user" not in st.session_state:
 
 # ===== LOGOUT =====
 if st.button("🚪 Sair"):
-
-    # marca logout
     st.session_state["logout"] = True
 
-    # remove cookie
     if "user_id" in cookies:
         del cookies["user_id"]
 
     cookies.save()
 
-    # remove user
     if "user" in st.session_state:
         del st.session_state["user"]
 
@@ -193,3 +190,130 @@ st.download_button(
     file_name=f"resumo_{mes}_{ano}.pdf",
     mime="application/pdf"
 )
+
+# ===== CONTROLES =====
+if "show_ganho" not in st.session_state:
+    st.session_state.show_ganho = False
+if "show_gasto" not in st.session_state:
+    st.session_state.show_gasto = False
+
+col1, col2 = st.columns(2)
+
+with col1:
+    if st.button("➕ Ganho", use_container_width=True):
+        st.session_state.show_ganho = True
+        st.session_state.show_gasto = False
+
+with col2:
+    if st.button("➕ Gasto", use_container_width=True):
+        st.session_state.show_gasto = True
+        st.session_state.show_ganho = False
+
+# ===== GANHO =====
+if st.session_state.show_ganho:
+    with st.form("form_ganho", clear_on_submit=True):
+        data = st.date_input("Data", value=date.today())
+        categoria = st.selectbox("Categoria", ["SALARIO","VALE"])
+        descricao = st.text_input("Descrição")
+        valor = st.number_input("Valor", min_value=0.0)
+
+        salvar = st.form_submit_button("Salvar")
+
+        if salvar:
+            supabase.table("movimentacoes").insert({
+                "user_id": st.session_state["user"]["id"],
+                "data": str(data),
+                "tipo": "Ganho",
+                "categoria": categoria,
+                "descricao": descricao,
+                "valor": valor,
+                "mes": MESES_PT[data.month],
+                "ano": data.year
+            }).execute()
+
+            st.rerun()
+
+# ===== GASTO =====
+if st.session_state.show_gasto:
+    with st.form("form_gasto", clear_on_submit=True):
+        data = st.date_input("Data", value=date.today())
+        categoria = st.selectbox("Categoria", [
+            "CARTAO DE CREDITO","ALIMENTAÇÃO","LAZER","VEICULO","DESPESAS FIXAS","OUTROS"
+        ])
+        descricao = st.text_input("Descrição")
+        valor = st.number_input("Valor", min_value=0.0)
+
+        salvar = st.form_submit_button("Salvar")
+
+        if salvar:
+            supabase.table("movimentacoes").insert({
+                "user_id": st.session_state["user"]["id"],
+                "data": str(data),
+                "tipo": "Gasto",
+                "categoria": categoria,
+                "descricao": descricao,
+                "valor": valor,
+                "mes": MESES_PT[data.month],
+                "ano": data.year
+            }).execute()
+
+            st.rerun()
+
+# ===== HISTÓRICO =====
+st.divider()
+
+with st.expander("📊 Histórico"):
+    df_sorted = df_mes.sort_values(["data"], ascending=False)
+
+    for _, row in df_sorted.iterrows():
+
+        cor = "green" if row["tipo"] == "Ganho" else "red"
+        data_formatada = row["data"].strftime("%d/%m/%Y") if pd.notnull(row["data"]) else "-"
+
+        st.markdown(f"""
+        <div style="padding:10px;border-radius:10px;background:#f5f5f7;margin-bottom:8px;">
+            <b>{row['categoria']}</b> {row['descricao']}<br>
+            <span style="color:{cor};font-weight:bold;">
+                {formatar_moeda(row['valor'])}
+            </span><br>
+            <small>{data_formatada}</small>
+        </div>
+        """, unsafe_allow_html=True)
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            if st.button("✏️", key=f"edit_{row['id']}"):
+                st.session_state["edit_id"] = row["id"]
+
+        with col2:
+            if st.button("🗑️", key=f"del_{row['id']}"):
+                supabase.table("movimentacoes").delete().eq("id", row["id"]).execute()
+                st.rerun()
+
+# ===== EDITAR =====
+if "edit_id" in st.session_state:
+    linha = df[df["id"] == st.session_state["edit_id"]].iloc[0]
+
+    st.subheader("✏️ Editar lançamento")
+
+    with st.form("edit_form"):
+        data = st.date_input("Data", linha["data"].date())
+        tipo = st.selectbox("Tipo", ["Ganho","Gasto"], index=0 if linha["tipo"]=="Ganho" else 1)
+        categoria = st.text_input("Categoria", linha["categoria"])
+        descricao = st.text_input("Descrição", linha["descricao"])
+        valor = st.number_input("Valor", value=float(linha["valor"]))
+
+        if st.form_submit_button("Atualizar"):
+            supabase.table("movimentacoes").update({
+                "data": str(data),
+                "tipo": tipo,
+                "categoria": categoria,
+                "descricao": descricao,
+                "valor": valor,
+                "mes": MESES_PT[data.month],
+                "ano": data.year
+            }).eq("id", linha["id"]).execute()
+
+            del st.session_state["edit_id"]
+            st.rerun()

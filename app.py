@@ -88,7 +88,7 @@ def gerar_pdf_estilizado(df, mes, ano, ganhos, gastos, saldo):
 # ===== LOGIN PERSISTENTE =====
 if "user" not in st.session_state:
 
-    iif cookies.get("user_id") and not st.session_state.get("logout"):
+    if cookies.get("user_id") and not st.session_state.get("logout"):
         st.session_state["user"] = {"id": cookies.get("user_id")}
     else:
         st.title("🔐 Login")

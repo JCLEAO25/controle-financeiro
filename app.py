@@ -125,9 +125,11 @@ if "user" not in st.session_state:
 
 # ===== LOGOUT =====
 if st.button("🚪 Sair"):
-    cookies["user_id"] = ""
+    if "user_id" in cookies:
+        del cookies["user_id"]
     cookies.save()
     st.session_state.clear()
+    st.success("Logout realizado")
     st.rerun()
 
 # ===== DADOS =====
